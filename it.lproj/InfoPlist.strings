@@ -1,0 +1,3 @@
+"CFBundleName" = "Regolazioni Webcam";
+"CFBundleDisplayName" = "Regolazioni Webcam";
+"NSCameraUsageDescription" = "Serve per mostrare l'anteprima mentre regoli la webcam.";
