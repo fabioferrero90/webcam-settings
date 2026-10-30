@@ -11,7 +11,7 @@ for s in 16 32 128 256 512; do
   sips -z $((s*2)) $((s*2)) build/icon.png --out build/AppIcon.iconset/icon_${s}x${s}@2x.png >/dev/null
 done
 iconutil -c icns build/AppIcon.iconset -o "$APP/Contents/Resources/AppIcon.icns"
-cp -R it.lproj "$APP/Contents/Resources/"
+cp -R it.lproj fr.lproj de.lproj es.lproj "$APP/Contents/Resources/"
 clang -c uvc.c -o build/obj/uvc.o
 swiftc -O -parse-as-library -import-objc-header uvc.h main.swift build/obj/uvc.o \
   -framework IOKit -framework AVFoundation -o "$APP/Contents/MacOS/WebcamSettings"
@@ -29,7 +29,7 @@ cat > "$APP/Contents/Info.plist" <<'EOF'
   <key>CFBundleShortVersionString</key><string>1.0</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>CFBundleDevelopmentRegion</key><string>en</string>
-  <key>CFBundleLocalizations</key><array><string>en</string><string>it</string></array>
+  <key>CFBundleLocalizations</key><array><string>en</string><string>it</string><string>fr</string><string>de</string><string>es</string></array>
   <key>LSHasLocalizedDisplayName</key><true/>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>

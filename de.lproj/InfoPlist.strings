@@ -1,0 +1,3 @@
+"CFBundleName" = "Webcam-Einstellungen";
+"CFBundleDisplayName" = "Webcam-Einstellungen";
+"NSCameraUsageDescription" = "Wird für die Live-Vorschau beim Einstellen der Webcam verwendet.";

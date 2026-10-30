@@ -1,0 +1,3 @@
+"CFBundleName" = "Ajustes de Webcam";
+"CFBundleDisplayName" = "Ajustes de Webcam";
+"NSCameraUsageDescription" = "Se usa para mostrar la vista previa mientras ajustas la webcam.";

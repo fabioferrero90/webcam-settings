@@ -1,7 +1,34 @@
 import SwiftUI
 import AVFoundation
 
-func L(_ key: String) -> String { NSLocalizedString(key, comment: "") }
+// MARK: - Language
+
+let languages = ["en", "it", "fr", "de", "es"]
+
+// Resolved once at launch from the system list, ignoring the app's own AppleLanguages override.
+private let systemLanguage: String = {
+    let prefs = UserDefaults.standard.persistentDomain(forName: UserDefaults.globalDomain)?["AppleLanguages"] as? [String]
+    return Bundle.preferredLocalizations(from: languages, forPreferences: prefs ?? Locale.preferredLanguages).first ?? "en"
+}()
+
+// "" follows the system language, falling back to English
+func currentLanguage() -> String {
+    let l = UserDefaults.standard.string(forKey: "language") ?? ""
+    return languages.contains(l) ? l : systemLanguage
+}
+
+func setLanguage(_ l: String) {
+    UserDefaults.standard.set(l, forKey: "language")
+    // AppleLanguages makes system menus and dialogs match on the next launch
+    if l.isEmpty { UserDefaults.standard.removeObject(forKey: "AppleLanguages") }
+    else { UserDefaults.standard.set([l], forKey: "AppleLanguages") }
+}
+
+func L(_ key: String) -> String {
+    guard let path = Bundle.main.path(forResource: currentLanguage(), ofType: "lproj"),
+          let bundle = Bundle(path: path) else { return key }
+    return bundle.localizedString(forKey: key, value: key, table: nil)
+}
 
 // MARK: - UVC controls
 
@@ -63,7 +90,7 @@ struct Range { var min = 0.0, max = 1.0, step = 1.0, def = 0.0 }
         values = [:]
         ranges = [:]
         connected = uvc_open() != 0
-        guard connected else { name = L("No UVC webcam found"); return }
+        guard connected else { name = ""; return }
         name = String(cString: uvc_name())
         vid = Int(uvc_vid())
         pid = Int(uvc_pid())
@@ -142,13 +169,13 @@ struct Range { var min = 0.0, max = 1.0, step = 1.0, def = 0.0 }
 
 final class Preview: ObservableObject {
     let session = AVCaptureSession()
-    @Published var status = L("Starting preview…")
+    @Published var status = "Starting preview…"   // localization key, so it follows language changes
 
     func start(vid: Int, pid: Int) {
         AVCaptureDevice.requestAccess(for: .video) { ok in
             DispatchQueue.main.async {
                 if ok { self.configure(vid, pid) }
-                else { self.status = L("Camera access denied.\nEnable it in System Settings › Privacy & Security › Camera.") }
+                else { self.status = "Camera access denied.\nEnable it in System Settings › Privacy & Security › Camera." }
             }
         }
     }
@@ -157,7 +184,7 @@ final class Preview: ObservableObject {
         let devices = AVCaptureDevice.DiscoverySession(deviceTypes: [.external], mediaType: .video, position: .unspecified).devices
         let tag = "VendorID_\(vid) ProductID_\(pid)"
         guard let d = devices.first(where: { $0.modelID.contains(tag) }) ?? devices.first,
-              let input = try? AVCaptureDeviceInput(device: d) else { status = L("Preview unavailable"); return }
+              let input = try? AVCaptureDeviceInput(device: d) else { status = "Preview unavailable"; return }
         session.beginConfiguration()
         session.inputs.forEach(session.removeInput)
         if session.canAddInput(input) { session.addInput(input) }
@@ -183,6 +210,7 @@ struct PreviewView: NSViewRepresentable {
 // MARK: - Interface
 
 struct ContentView: View {
+    @AppStorage("language") private var language = ""   // redraws the interface when the language changes
     @StateObject private var cam = Camera()
     @StateObject private var preview = Preview()
 
@@ -192,7 +220,7 @@ struct ContentView: View {
                 Color.black
                 PreviewView(session: preview.session)
                 if !preview.status.isEmpty {
-                    Text(preview.status).foregroundStyle(.white.opacity(0.7)).multilineTextAlignment(.center).padding()
+                    Text(L(preview.status)).foregroundStyle(.white.opacity(0.7)).multilineTextAlignment(.center).padding()
                 }
             }
             .frame(minWidth: 520, minHeight: 360)
@@ -204,12 +232,13 @@ struct ContentView: View {
             }
             .frame(width: 380)
         }
+        .navigationTitle(L("Webcam Settings"))
         .onAppear(perform: start)
     }
 
     private func start() {
         cam.connect()
-        guard cam.connected else { preview.status = L("Connect the webcam and press Reconnect"); return }
+        guard cam.connected else { preview.status = "Connect the webcam and press Reconnect"; return }
         preview.start(vid: cam.vid, pid: cam.pid)
         // settings are only accepted while the video is streaming
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { cam.applySaved() }
@@ -219,7 +248,7 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Image(systemName: "web.camera")
-                Text(cam.name).font(.headline).lineLimit(1)
+                Text(cam.connected ? cam.name : L("No UVC webcam found")).font(.headline).lineLimit(1)
                 Spacer()
                 Button(L("Reconnect"), action: start)
             }
@@ -281,14 +310,35 @@ struct ContentView: View {
     }
 }
 
+struct SettingsView: View {
+    @AppStorage("language") private var language = ""
+
+    var body: some View {
+        Form {
+            Picker(L("Language"), selection: Binding(get: { language }, set: setLanguage)) {
+                Text(L("System default")).tag("")
+                Divider()
+                ForEach(languages, id: \.self) { l in
+                    Text(Locale(identifier: l).localizedString(forLanguageCode: l)?.capitalized ?? l).tag(l)
+                }
+            }
+            Text(L("Menus switch language the next time the app opens.")).font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(20)
+        .frame(width: 380)
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 }
 
 @main struct WebcamSettingsApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    @AppStorage("language") private var language = ""
     var body: some Scene {
         WindowGroup(L("Webcam Settings")) { ContentView() }
             .windowResizability(.contentMinSize)
+        Settings { SettingsView() }
     }
 }

@@ -34,3 +34,7 @@
 "Off" = "Disattivato";
 "50 Hz (Europe)" = "50 Hz (Europa)";
 "60 Hz (Americas)" = "60 Hz (Americhe)";
+
+"Language" = "Lingua";
+"System default" = "Lingua di sistema";
+"Menus switch language the next time the app opens." = "I menu cambiano lingua alla prossima apertura dell'app.";

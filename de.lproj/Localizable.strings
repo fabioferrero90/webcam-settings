@@ -1,0 +1,40 @@
+/* German translation */
+
+"Webcam Settings" = "Webcam-Einstellungen";
+"No UVC webcam found" = "Keine UVC-Webcam gefunden";
+"Starting preview…" = "Vorschau wird gestartet …";
+"Camera access denied.\nEnable it in System Settings › Privacy & Security › Camera." = "Kamerazugriff verweigert.\nAktiviere ihn unter Systemeinstellungen › Datenschutz & Sicherheit › Kamera.";
+"Preview unavailable" = "Vorschau nicht verfügbar";
+"Connect the webcam and press Reconnect" = "Schließe die Webcam an und klicke auf „Neu verbinden“";
+"Reconnect" = "Neu verbinden";
+"Reapply saved" = "Gespeicherte anwenden";
+"Restore defaults" = "Standardwerte";
+"Let the camera focus automatically, then turn autofocus off: focus stays locked at that point." = "Lass die Kamera automatisch scharfstellen und schalte dann den Autofokus aus: Der Fokus bleibt an diesem Punkt fixiert.";
+"Default value (%d)" = "Standardwert (%d)";
+
+"Focus & zoom" = "Fokus & Zoom";
+"Exposure" = "Belichtung";
+"Color & image" = "Farbe & Bild";
+
+"Autofocus" = "Autofokus";
+"Focus" = "Fokus";
+"Zoom" = "Zoom";
+"Auto exposure" = "Automatische Belichtung";
+"Gain" = "Verstärkung";
+"Backlight compensation" = "Gegenlichtkorrektur";
+"Auto white balance" = "Automatischer Weißabgleich";
+"Color temperature" = "Farbtemperatur";
+"Brightness" = "Helligkeit";
+"Contrast" = "Kontrast";
+"Saturation" = "Sättigung";
+"Hue" = "Farbton";
+"Gamma" = "Gamma";
+"Sharpness" = "Schärfe";
+"Anti-flicker" = "Flimmerreduzierung";
+"Off" = "Aus";
+"50 Hz (Europe)" = "50 Hz (Europa)";
+"60 Hz (Americas)" = "60 Hz (Amerika)";
+
+"Language" = "Sprache";
+"System default" = "Systemsprache";
+"Menus switch language the next time the app opens." = "Die Menüs wechseln die Sprache beim nächsten Start der App.";

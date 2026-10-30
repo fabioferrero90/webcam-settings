@@ -33,7 +33,8 @@ The app only shows the controls your webcam reports as supported.
 - **Saved settings**: every change is remembered and reapplied when the app opens, since many webcams reset to factory
   values when unplugged or when the Mac restarts.
 - **Restore defaults** with one click, or right-click a single slider.
-- **English and Italian** interface, following the system language.
+- **English, Italian, French, German and Spanish** interface. It follows the system language (English when the
+  system language is not available), or you can pick one in **Settings** (⌘,).
 
 ## Requirements
 
@@ -60,7 +61,7 @@ The app is not signed with an Apple Developer certificate (ad-hoc signature only
 | --- | --- |
 | [`uvc.c`](uvc.c) / [`uvc.h`](uvc.h) | Finds the first UVC webcam with IOKit, parses the USB descriptor to locate the camera terminal and processing unit, and sends `GET_CUR`/`SET_CUR`/`GET_MIN`/`GET_MAX`/… requests on the control endpoint |
 | [`main.swift`](main.swift) | SwiftUI interface, AVFoundation preview, and settings persistence in `UserDefaults` (per vendor/product ID) |
-| [`it.lproj/`](it.lproj) | Italian localization |
+| [`it.lproj/`](it.lproj), [`fr.lproj/`](fr.lproj), [`de.lproj/`](de.lproj), [`es.lproj/`](es.lproj) | Italian, French, German and Spanish localizations (English is built into the code) |
 | [`make-icon.swift`](make-icon.swift) | Draws the app icon with AppKit |
 | [`build.sh`](build.sh) | Compiles everything with `clang` and `swiftc` and assembles the `.app` bundle with icon and ad-hoc signature |
 
