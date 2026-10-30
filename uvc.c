@@ -5,43 +5,44 @@
 #include <IOKit/usb/IOUSBLib.h>
 #include <IOKit/IOCFPlugIn.h>
 
+typedef struct { UInt8 vcIf, unitId[2]; UInt32 controls[2]; } layout;
+
 static IOUSBDeviceInterface **dev;
-static UInt8 vcIf, unitId[2];
-static UInt32 controls[2];
-static char name[128];
-static int vid, pid;
+static layout lay;
+static uvc_info info;
 
 // Finds the Video Control interface, the camera terminal and the processing unit
 // in the configuration descriptor, along with their control bitmaps.
-static int parse(IOUSBDeviceInterface **d) {
+static int parse(IOUSBDeviceInterface **d, layout *l) {
     IOUSBConfigurationDescriptorPtr cfg;
     if ((*d)->GetConfigurationDescriptorPtr(d, 0, &cfg)) return 0;
     UInt8 *p = (UInt8 *)cfg, *end = p + USBToHostWord(cfg->wTotalLength);
     int isVC = 0, found = 0;
-    unitId[0] = unitId[1] = 0;
-    controls[0] = controls[1] = 0;
+    *l = (layout){0};
     for (; p + 2 <= end && p[0]; p += p[0]) {
         if (p[1] == 0x04) {
             isVC = p[5] == 0x0E && p[6] == 0x01;
-            if (isVC && !found) { vcIf = p[2]; found = 1; }
+            if (isVC && !found) { l->vcIf = p[2]; found = 1; }
         } else if (isVC && p[1] == 0x24) {
             if (p[2] == 0x02 && (p[4] | p[5] << 8) == 0x0201) {
-                unitId[UVC_CAM] = p[3];
-                for (int i = 0; i < p[14] && i < 4; i++) controls[UVC_CAM] |= (UInt32)p[15 + i] << (8 * i);
+                l->unitId[UVC_CAM] = p[3];
+                for (int i = 0; i < p[14] && i < 4; i++) l->controls[UVC_CAM] |= (UInt32)p[15 + i] << (8 * i);
             } else if (p[2] == 0x05) {
-                unitId[UVC_PU] = p[3];
-                for (int i = 0; i < p[7] && i < 4; i++) controls[UVC_PU] |= (UInt32)p[8 + i] << (8 * i);
+                l->unitId[UVC_PU] = p[3];
+                for (int i = 0; i < p[7] && i < 4; i++) l->controls[UVC_PU] |= (UInt32)p[8 + i] << (8 * i);
             }
         }
     }
     return found;
 }
 
-int uvc_open(void) {
-    if (dev) { (*dev)->Release(dev); dev = NULL; }
+// Walks the connected UVC webcams. Fills `list` when given; keeps open the one on `want`
+// (0 = the first) when `open` is set. Returns how many webcams were seen.
+static int scan(uvc_info *list, int max, int open, unsigned want) {
     io_iterator_t it;
     if (IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching(kIOUSBDeviceClassName), &it)) return 0;
     io_service_t svc;
+    int n = 0;
     while ((svc = IOIteratorNext(it))) {
         IOCFPlugInInterface **plug;
         SInt32 score;
@@ -50,38 +51,49 @@ int uvc_open(void) {
             (*plug)->QueryInterface(plug, CFUUIDGetUUIDBytes(kIOUSBDeviceInterfaceID), (LPVOID *)&d);
             IODestroyPlugInInterface(plug);
         }
-        if (d && parse(d)) {
+        layout l;
+        if (d && parse(d, &l)) {
             UInt16 v, p;
+            UInt32 loc = 0;
             (*d)->GetDeviceVendor(d, &v);
             (*d)->GetDeviceProduct(d, &p);
-            vid = v; pid = p;
-            io_name_t n;
-            IORegistryEntryGetName(svc, n);
-            strlcpy(name, n, sizeof name);
-            dev = d;
-            IOObjectRelease(svc);
-            break;
+            (*d)->GetLocationID(d, &loc);
+            uvc_info i = { .vid = v, .pid = p, .location = loc };
+            io_name_t nm;
+            IORegistryEntryGetName(svc, nm);
+            strlcpy(i.name, nm, sizeof i.name);
+            if (list && n < max) list[n] = i;
+            n++;
+            if (open && !dev && (!want || want == loc)) { dev = d; lay = l; info = i; d = NULL; }
         }
         if (d) (*d)->Release(d);
         IOObjectRelease(svc);
     }
     IOObjectRelease(it);
+    return n;
+}
+
+int uvc_list(uvc_info *out, int max) { return scan(out, max, 0, 0); }
+
+int uvc_open(unsigned location) {
+    if (dev) { (*dev)->Release(dev); dev = NULL; }
+    scan(NULL, 0, 1, location);
     return dev != NULL;
 }
 
-const char *uvc_name(void) { return name; }
-int uvc_vid(void) { return vid; }
-int uvc_pid(void) { return pid; }
+const char *uvc_name(void) { return info.name; }
+int uvc_vid(void) { return info.vid; }
+int uvc_pid(void) { return info.pid; }
 
 int uvc_supported(int unit, int bit) {
-    return unit >= 0 && unit < 2 && unitId[unit] && (controls[unit] >> bit & 1);
+    return unit >= 0 && unit < 2 && lay.unitId[unit] && (lay.controls[unit] >> bit & 1);
 }
 
 static IOReturn req(int unit, int in, int r, int sel, void *buf, int len) {
     if (!dev) return kIOReturnNotOpen;
     IOUSBDevRequest q = {
         .bmRequestType = in ? 0xA1 : 0x21, .bRequest = r,
-        .wValue = sel << 8, .wIndex = (unitId[unit] << 8) | vcIf,
+        .wValue = sel << 8, .wIndex = (lay.unitId[unit] << 8) | lay.vcIf,
         .wLength = len, .pData = buf };
     return (*dev)->DeviceRequest(dev, &q);
 }

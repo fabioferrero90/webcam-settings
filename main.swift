@@ -68,9 +68,13 @@ let sections: [(String, [String])] = [
 
 struct Range { var min = 0.0, max = 1.0, step = 1.0, def = 0.0 }
 
+struct Device: Hashable { let name: String, vid: Int, pid: Int, location: UInt32 }
+
 @MainActor final class Camera: ObservableObject {
     @Published var connected = false
     @Published var name = ""
+    @Published var devices: [Device] = []
+    @Published var location: UInt32 = 0   // USB location of the open webcam
     @Published var values: [String: Double] = [:]
     @Published var ranges: [String: Range] = [:]
     var vid = 0, pid = 0
@@ -89,11 +93,22 @@ struct Range { var min = 0.0, max = 1.0, step = 1.0, def = 0.0 }
     func connect() {
         values = [:]
         ranges = [:]
-        connected = uvc_open() != 0
-        guard connected else { name = ""; return }
-        name = String(cString: uvc_name())
-        vid = Int(uvc_vid())
-        pid = Int(uvc_pid())
+        var list = [uvc_info](repeating: uvc_info(), count: 16)
+        let n = Int(uvc_list(&list, Int32(list.count)))
+        devices = list.prefix(n).map { i in
+            let name = withUnsafeBytes(of: i.name) { String(cString: $0.bindMemory(to: CChar.self).baseAddress!) }
+            return Device(name: name, vid: Int(i.vid), pid: Int(i.pid), location: i.location)
+        }
+        // the last chosen webcam: same model on the same port first, then the same model anywhere
+        let saved = (store.string(forKey: "camera") ?? "").split(separator: ":").compactMap { Int($0) }
+        let sameModel = { (d: Device) in saved.count == 3 && d.vid == saved[0] && d.pid == saved[1] }
+        let pick = devices.first { sameModel($0) && Int($0.location) == saved[2] } ?? devices.first(where: sameModel) ?? devices.first
+        connected = pick.map { uvc_open($0.location) != 0 } ?? false
+        guard connected, let d = pick else { name = ""; return }
+        name = d.name
+        vid = d.vid
+        pid = d.pid
+        location = d.location
         for c in allControls where uvc_supported(c.unit, c.bit) != 0 {
             var r = Range(def: read(c, UVC_GET_DEF) ?? 0)
             if c.kind == .slider {
@@ -111,6 +126,14 @@ struct Range { var min = 0.0, max = 1.0, step = 1.0, def = 0.0 }
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.poll() }
         }
+    }
+
+    func select(_ d: Device) { store.set("\(d.vid):\(d.pid):\(d.location)", forKey: "camera") }
+
+    // Tells apart webcams of the same model
+    func label(_ d: Device) -> String {
+        let twins = devices.filter { $0.name == d.name }
+        return twins.count > 1 ? "\(d.name) (\(twins.firstIndex(of: d)! + 1))" : d.name
     }
 
     // While an automatic mode is on, show the value the webcam is choosing.
@@ -171,19 +194,21 @@ final class Preview: ObservableObject {
     let session = AVCaptureSession()
     @Published var status = "Starting preview…"   // localization key, so it follows language changes
 
-    func start(vid: Int, pid: Int) {
+    func start(location: UInt32, vid: Int, pid: Int) {
         AVCaptureDevice.requestAccess(for: .video) { ok in
             DispatchQueue.main.async {
-                if ok { self.configure(vid, pid) }
+                if ok { self.configure(location, vid, pid) }
                 else { self.status = "Camera access denied.\nEnable it in System Settings › Privacy & Security › Camera." }
             }
         }
     }
 
-    private func configure(_ vid: Int, _ pid: Int) {
+    private func configure(_ location: UInt32, _ vid: Int, _ pid: Int) {
         let devices = AVCaptureDevice.DiscoverySession(deviceTypes: [.external], mediaType: .video, position: .unspecified).devices
+        // USB webcams get a uniqueID made of location, vendor and product ID, e.g. 0x31300000c45636f
+        let uid = String(format: "0x%x%04x%04x", location, vid, pid)
         let tag = "VendorID_\(vid) ProductID_\(pid)"
-        guard let d = devices.first(where: { $0.modelID.contains(tag) }) ?? devices.first,
+        guard let d = devices.first(where: { $0.uniqueID == uid }) ?? devices.first(where: { $0.modelID.contains(tag) }) ?? devices.first,
               let input = try? AVCaptureDeviceInput(device: d) else { status = "Preview unavailable"; return }
         session.beginConfiguration()
         session.inputs.forEach(session.removeInput)
@@ -239,16 +264,29 @@ struct ContentView: View {
     private func start() {
         cam.connect()
         guard cam.connected else { preview.status = "Connect the webcam and press Reconnect"; return }
-        preview.start(vid: cam.vid, pid: cam.pid)
+        preview.start(location: cam.location, vid: cam.vid, pid: cam.pid)
         // settings are only accepted while the video is streaming
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { cam.applySaved() }
+    }
+
+    private func switchTo(_ location: UInt32) {
+        guard let d = cam.devices.first(where: { $0.location == location }) else { return }
+        cam.select(d)
+        start()
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Image(systemName: "web.camera")
-                Text(cam.connected ? cam.name : L("No UVC webcam found")).font(.headline).lineLimit(1)
+                if cam.devices.count > 1 {
+                    Picker(L("Webcam"), selection: Binding(get: { cam.location }, set: switchTo)) {
+                        ForEach(cam.devices, id: \.location) { Text(cam.label($0)).tag($0.location) }
+                    }
+                    .labelsHidden()
+                } else {
+                    Text(cam.connected ? cam.name : L("No UVC webcam found")).font(.headline).lineLimit(1)
+                }
                 Spacer()
                 Button(L("Reconnect"), action: start)
             }
